@@ -8,6 +8,8 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-22c55e?style=for-the-badge)](LICENSE)
 [![Dependencies: 0](https://img.shields.io/badge/dependencies-0-f97316?style=for-the-badge)](pyproject.toml)
 [![Tests: 98.9%](https://img.shields.io/badge/tests-98.9%25-22c55e?style=for-the-badge)](tests/)
+[![AgentBench: 91.1%](https://img.shields.io/badge/AgentBench-91.1%25-2563EB?style=for-the-badge)](benchmarks/MINICODE_AGENTBENCH.md)
+[![AgentBench CI](https://github.com/Dopetaiga/MiniCode-Python/actions/workflows/agentbench.yml/badge.svg)](https://github.com/Dopetaiga/MiniCode-Python/actions/workflows/agentbench.yml)
 
 [![Readability: 9/10](https://img.shields.io/badge/readability-9%2F10-4F46E5?style=for-the-badge)](docs/)
 [![Performance: Optimized](https://img.shields.io/badge/performance-optimized-06B6D4?style=for-the-badge)](#-performance)
@@ -24,6 +26,22 @@
 
 ---
 
+## Fork 二次开发 / Fork Development
+
+这是 [`QUSETIONS/MiniCode-Python`](https://github.com/QUSETIONS/MiniCode-Python) 的个人 fork，当前二次开发线基于上游提交 [`0760162`](https://github.com/QUSETIONS/MiniCode-Python/commit/0760162edded7f787ceb05d98c04cc53f615c2cc)。本分支在保留轻量终端 Agent 结构的基础上，重点新增：
+
+- OpenAI-compatible provider 与 DeepSeek V4 配置、重试和 usage 统计；
+- 同步、后台并行及 `.claude/agents` 自定义 subagent；
+- 15 任务、45 episode 的 MiniCode AgentBench v1.1；
+- 隐藏 pytest、缺陷基线/oracle 校验、逐题进程隔离、超时和 checkpoint；
+- DeepSeek V4 Flash 严格成功率 **41/45（91.1%）** 的脱敏可审计结果。
+
+评测方法、限制和复现命令见 [MiniCode AgentBench](benchmarks/MINICODE_AGENTBENCH.md)，机器可读结果见 [DSV4 Flash 3-run result](benchmarks/results/dsv4_flash_full_3runs_2026-08-09.json)。该成绩是本项目测试集结果，不是 SWE-bench 或 Terminal-Bench 排名。
+
+This is a personal fork of [`QUSETIONS/MiniCode-Python`](https://github.com/QUSETIONS/MiniCode-Python), with the current development line based on upstream commit [`0760162`](https://github.com/QUSETIONS/MiniCode-Python/commit/0760162edded7f787ceb05d98c04cc53f615c2cc). The fork adds an OpenAI-compatible runtime, bounded synchronous/background sub-agents, and a reproducible 15-task execution-based AgentBench. DeepSeek V4 Flash achieved a conservative strict score of **41/45 (91.1%)** across 45 independent episodes; the methodology and limitations are published with the code.
+
+---
+
 # 🇨🇳 中文
 
 ## 🚀 快速开始
@@ -31,7 +49,7 @@
 ### 安装
 
 ```bash
-git clone https://github.com/QUSETIONS/MiniCode-Python.git
+git clone https://github.com/Dopetaiga/MiniCode-Python.git
 cd MiniCode-Python
 
 # 交互式安装（推荐）
@@ -145,6 +163,30 @@ minicode-py
 | `docker_helper` | Docker 管理 |
 | `db_explorer` | SQLite 数据库探索 |
 
+### Sub-agent 委派
+
+| 工具 | 说明 |
+|---|---|
+| `delegate_task` | 同步运行内置或 `.claude/agents` 自定义子代理 |
+| `subagent_control` | 后台启动、查看、等待或取消只读子代理 |
+
+Explore 和 Plan 只获得只读工具，可并行后台运行；General 使用同步委派，可修改工作区，但仍经过父级权限系统。子代理不继承父对话历史、不能再次委派，并受独立步数上限约束。后台 General 被禁用，避免在非交互线程触发权限询问。
+
+MiniCode Python 也会发现 Claude Code 风格的用户级 `~/.claude/agents/*.md` 和项目级 `.claude/agents/*.md`；同名定义以项目级为准。当前兼容 `name`、`description`、`tools`、`disallowedTools`、`model`、`permissionMode: plan` 和 `maxTurns`，Markdown 正文作为子代理系统提示。`Read`、`Grep`、`Glob`、`Bash`、`Write`、`Edit` 等 Claude 工具名会映射到 MiniCode Python 工具名。
+
+```markdown
+---
+name: dependency-auditor
+description: 只读检查依赖与版本风险
+tools: Read, Grep, Glob
+model: inherit
+maxTurns: 8
+---
+检查项目依赖，只报告有文件证据支撑的结论。
+```
+
+只有最终工具白名单为只读的自定义代理才能后台运行。模型接收的工具 schema 与执行白名单相同；所有子代理仍禁止嵌套委派。尚未实现 `skills`、`memory`、`hooks`、`mcpServers`、`isolation` 等高级 frontmatter 字段。
+
 *完整工具列表见 [英文版文档](#-built-in-tools)*
 
 ---
@@ -165,13 +207,37 @@ minicode-py
 }
 ```
 
+### DeepSeek V4（OpenAI 兼容接口）
+
+建议先关闭思考模式，单独验证 Agent 循环和工具调用：
+
+```powershell
+$env:MINI_CODE_PROVIDER = "openai"
+$env:OPENAI_API_KEY = "<your-deepseek-key>"
+$env:OPENAI_BASE_URL = "https://api.deepseek.com"
+$env:OPENAI_MODEL = "deepseek-v4-pro"
+$env:MINI_CODE_MAX_OUTPUT_TOKENS = "8192"
+$env:MINI_CODE_THINKING = "disabled"
+python -m minicode.main
+```
+
+基线通过后，将 `MINI_CODE_THINKING` 改为 `enabled` 再跑一轮。MiniCode 会保留并回传 DeepSeek 工具调用返回的 `reasoning_content`。DeepSeek 会自动使用 `max_tokens`；如其它兼容网关需要该参数，可设置 `OPENAI_MAX_TOKENS_PARAM=max_tokens`。
+
+可选的真实接口工具回路测试：
+
+```powershell
+pytest -q tests/test_openai_live.py -s
+```
+
+不要把 API key 提交到仓库。如果使用安装向导持久化 key，它会写入用户级 `~/.mini-code/settings.json`。
+
 ---
 
 ## 🧪 开发
 
 ```bash
 # 克隆仓库
-git clone https://github.com/QUSETIONS/MiniCode-Python.git
+git clone https://github.com/Dopetaiga/MiniCode-Python.git
 cd MiniCode-Python
 
 # 运行测试
@@ -220,7 +286,7 @@ After **8 rounds of systematic optimization** (93+ optimizations), MiniCode Pyth
 ### Installation
 
 ```bash
-git clone https://github.com/QUSETIONS/MiniCode-Python.git
+git clone https://github.com/Dopetaiga/MiniCode-Python.git
 cd MiniCode-Python
 
 # Interactive installer (recommended)
@@ -336,6 +402,44 @@ minicode-py
 | `ask_user` | Prompt user for clarification |
 | `load_skill` | Load domain-specific skills |
 
+### Sub-agent Delegation
+
+| Tool | Description |
+|------|-------------|
+| `delegate_task` | Run a built-in or `.claude/agents` custom child synchronously |
+| `subagent_control` | Spawn, inspect, wait for, or cancel background read-only children |
+
+Explore and Plan receive read-only tools and may run concurrently in the
+background. General runs synchronously, may modify the workspace, and still
+uses the parent's permission manager. Children do not inherit the parent
+conversation, cannot delegate again, and have independent step limits.
+Background General is disabled so permission prompts never originate from a
+non-interactive worker thread.
+
+MiniCode Python also discovers Claude Code-style user definitions from
+`~/.claude/agents/*.md` and project definitions from `.claude/agents/*.md`.
+Project definitions win on duplicate names. The supported compatibility subset
+is `name`, `description`, `tools`, `disallowedTools`, `model`,
+`permissionMode: plan`, and `maxTurns`; the Markdown body becomes the child's
+system prompt. Claude tool names such as `Read`, `Grep`, `Glob`, `Bash`,
+`Write`, and `Edit` are mapped to MiniCode Python tools.
+
+```markdown
+---
+name: dependency-auditor
+description: Read-only dependency and version risk review
+tools: Read, Grep, Glob
+model: inherit
+maxTurns: 8
+---
+Inspect dependencies and report only conclusions grounded in file evidence.
+```
+
+Only custom definitions whose effective allowlist is read-only can run in the
+background. The model sees the same filtered tool schema that the executor
+enforces, and nested delegation remains disabled. Advanced fields such as
+`skills`, `memory`, `hooks`, `mcpServers`, and `isolation` are not implemented.
+
 ---
 
 ## ⚙️ Configuration
@@ -354,6 +458,30 @@ minicode-py
 }
 ```
 
+### DeepSeek V4 through the OpenAI-compatible API
+
+Start with thinking disabled so agent-loop and tool-call failures are isolated from reasoning behavior:
+
+```powershell
+$env:MINI_CODE_PROVIDER = "openai"
+$env:OPENAI_API_KEY = "<your-deepseek-key>"
+$env:OPENAI_BASE_URL = "https://api.deepseek.com"
+$env:OPENAI_MODEL = "deepseek-v4-pro"
+$env:MINI_CODE_MAX_OUTPUT_TOKENS = "8192"
+$env:MINI_CODE_THINKING = "disabled"
+python -m minicode.main
+```
+
+After that baseline passes, change `MINI_CODE_THINKING` to `enabled`. MiniCode preserves DeepSeek's `reasoning_content` across tool-call turns. DeepSeek endpoints automatically select `max_tokens`; set `OPENAI_MAX_TOKENS_PARAM=max_tokens` only when another compatible gateway also requires it.
+
+Run the optional live tool-call smoke test with the same environment variables:
+
+```powershell
+pytest -q tests/test_openai_live.py -s
+```
+
+Do not commit API keys. The interactive installer stores credentials in the user-level `~/.mini-code/settings.json`.
+
 ### Environment Variables
 
 | Variable | Description | Default |
@@ -362,6 +490,14 @@ minicode-py
 | `ANTHROPIC_AUTH_TOKEN` | Auth token (alternative) | — |
 | `ANTHROPIC_BASE_URL` | API base URL | `https://api.anthropic.com` |
 | `ANTHROPIC_MODEL` | Model name | — |
+| `MINI_CODE_PROVIDER` | `anthropic` or `openai` | inferred, then `anthropic` |
+| `OPENAI_API_KEY` | OpenAI-compatible API key | — |
+| `OPENAI_BASE_URL` | OpenAI-compatible base URL | `https://api.openai.com` |
+| `OPENAI_MODEL` | OpenAI-compatible model name | — |
+| `OPENAI_MAX_TOKENS_PARAM` | `max_completion_tokens` or `max_tokens` | provider-aware |
+| `MINI_CODE_MAX_OUTPUT_TOKENS` | Maximum generated tokens | provider default |
+| `MINI_CODE_THINKING` | DeepSeek thinking mode: `enabled` or `disabled` | provider default |
+| `MINI_CODE_REASONING_EFFORT` | Reasoning effort for compatible OpenAI models | provider default |
 | `MINI_CODE_MODEL_MODE` | Set to `mock` for testing | — |
 
 ---
@@ -396,7 +532,7 @@ minicode-py
 
 ```bash
 # Clone
-git clone https://github.com/QUSETIONS/MiniCode-Python.git
+git clone https://github.com/Dopetaiga/MiniCode-Python.git
 cd MiniCode-Python
 
 # Run tests
