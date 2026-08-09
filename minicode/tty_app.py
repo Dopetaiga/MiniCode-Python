@@ -1096,6 +1096,7 @@ def _handle_input(
             {
                 "skills": args.tools.get_skills(),
                 "mcpServers": args.tools.get_mcp_servers(),
+                "subagents": args.tools.find("delegate_task") is not None,
             },
         ),
     }

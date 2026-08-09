@@ -162,40 +162,66 @@ def main() -> None:
     print("📋 请输入配置信息：")
     print()
     
-    model = _require_input(
-        "Model name",
-        settings.get("model") or current_env.get("ANTHROPIC_MODEL", ""),
-    )
-    
-    base_url = _require_input(
-        "ANTHROPIC_BASE_URL",
-        current_env.get("ANTHROPIC_BASE_URL", "https://api.anthropic.com"),
-    )
-    
-    saved_auth_token = current_env.get("ANTHROPIC_AUTH_TOKEN", "")
-    token_status = _mask_secret(saved_auth_token)
-    token_input = _read_input(
-        f"ANTHROPIC_AUTH_TOKEN {token_status}",
-        None,
-    )
-    auth_token = token_input or saved_auth_token
-    
-    if not auth_token and not saved_auth_token:
-        print("\n❌ ANTHROPIC_AUTH_TOKEN 不能为空。")
+    configured_provider = settings.get("provider")
+    if not configured_provider:
+        configured_provider = "openai" if current_env.get("OPENAI_API_KEY") else "anthropic"
+    provider = _require_input("Provider (anthropic/openai)", str(configured_provider)).lower()
+    if provider not in {"anthropic", "openai"}:
+        print("\n❌ Provider 必须是 anthropic 或 openai。")
         sys.exit(1)
-    
-    auth_token = auth_token or saved_auth_token
+
+    if provider == "openai":
+        model = _require_input(
+            "Model name",
+            (settings.get("model") if configured_provider == provider else None)
+            or current_env.get("OPENAI_MODEL", ""),
+        )
+        base_url = _require_input(
+            "OPENAI_BASE_URL",
+            current_env.get("OPENAI_BASE_URL", "https://api.openai.com"),
+        )
+        saved_secret = current_env.get("OPENAI_API_KEY", "")
+        secret_name = "OPENAI_API_KEY"
+    else:
+        model = _require_input(
+            "Model name",
+            (settings.get("model") if configured_provider == provider else None)
+            or current_env.get("ANTHROPIC_MODEL", ""),
+        )
+        base_url = _require_input(
+            "ANTHROPIC_BASE_URL",
+            current_env.get("ANTHROPIC_BASE_URL", "https://api.anthropic.com"),
+        )
+        saved_secret = current_env.get("ANTHROPIC_AUTH_TOKEN", "")
+        secret_name = "ANTHROPIC_AUTH_TOKEN"
+
+    secret_status = _mask_secret(saved_secret)
+    secret_input = _read_input(f"{secret_name} {secret_status}", None)
+    secret = secret_input or saved_secret
+    if not secret:
+        print(f"\n❌ {secret_name} 不能为空。")
+        sys.exit(1)
+
+    if provider == "openai":
+        provider_env = {
+            "OPENAI_BASE_URL": base_url,
+            "OPENAI_API_KEY": secret,
+            "OPENAI_MODEL": model,
+        }
+    else:
+        provider_env = {
+            "ANTHROPIC_BASE_URL": base_url,
+            "ANTHROPIC_AUTH_TOKEN": secret,
+            "ANTHROPIC_MODEL": model,
+        }
     
     # Save configuration
     print("\n💾 保存配置...")
     try:
         save_mini_code_settings({
+            "provider": provider,
             "model": model,
-            "env": {
-                "ANTHROPIC_BASE_URL": base_url,
-                "ANTHROPIC_AUTH_TOKEN": auth_token,
-                "ANTHROPIC_MODEL": model,
-            },
+            "env": provider_env,
         })
         print(f"✅ 配置已保存到: {MINI_CODE_SETTINGS_PATH}")
     except OSError as e:

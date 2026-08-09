@@ -146,6 +146,19 @@ def build_system_prompt(
             + "Tip: Install skills via `npx superpowers-zh` in your project directory"
         )
 
+    if extras.get("subagents"):
+        parts.append(
+            "Sub-agent delegation:\n"
+            "- The delegate_task tool runs one bounded task in an isolated context and returns its result.\n"
+            "- The subagent_control tool can spawn background read-only workers, inspect them, wait, or cancel.\n"
+            "- Use explore for focused read-only search, plan for thorough read-only analysis, and general for implementation.\n"
+            "- Additional agent types may be discovered from .claude/agents; follow the tool schema enum.\n"
+            "- Delegate only a self-contained task with a concrete expected output.\n"
+            "- The child has no parent conversation history, cannot ask the user, and cannot delegate again.\n"
+            "- For parallel work, spawn independent read-only workers first, then wait for each result before synthesizing.\n"
+            "- Keep work in the parent when delegation would add more overhead than value."
+        )
+
     mcp_servers = extras.get("mcpServers", [])
     if mcp_servers:
         parts.append(

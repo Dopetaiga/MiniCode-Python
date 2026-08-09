@@ -92,6 +92,7 @@ def run_agent_turn(
     on_assistant_message: Callable[[str], None] | None = None,
     on_progress_message: Callable[[str], None] | None = None,
     context_manager: ContextManager | None = None,
+    should_cancel: Callable[[], bool] | None = None,
 ) -> list[ChatMessage]:
     current_messages = list(messages)
     saw_tool_result = False
@@ -114,7 +115,18 @@ def run_agent_turn(
             if on_assistant_message:
                 on_assistant_message(context_manager.get_context_summary())
 
+    def stop_if_cancelled() -> bool:
+        if should_cancel is None or not should_cancel():
+            return False
+        cancellation = "Agent turn cancelled."
+        if on_assistant_message:
+            on_assistant_message(cancellation)
+        current_messages.append({"role": "assistant", "content": cancellation})
+        return True
+
     while max_steps is None or step < max_steps:
+        if stop_if_cancelled():
+            return current_messages
         step += 1
         next_step: AgentStep
         try:
@@ -128,6 +140,7 @@ def run_agent_turn(
                 on_assistant_message(fallback)
             current_messages.append({"role": "assistant", "content": fallback})
             return current_messages
+
         except TimeoutError as error:
             fallback = f"Model API timeout: {error}"
             logger.error("Model API timeout: %s", error)
@@ -143,6 +156,9 @@ def run_agent_turn(
             if on_assistant_message:
                 on_assistant_message(fallback)
             current_messages.append({"role": "assistant", "content": fallback})
+            return current_messages
+
+        if stop_if_cancelled():
             return current_messages
 
         if next_step.type == "assistant":
@@ -254,7 +270,11 @@ def run_agent_turn(
         if not next_step.calls and next_step.content and next_step.contentKind != "progress":
             return current_messages
 
+        call_messages: list[ChatMessage] = []
+        result_messages: list[ChatMessage] = []
         for call in next_step.calls:
+            if stop_if_cancelled():
+                return current_messages
             if on_tool_start:
                 on_tool_start(call["toolName"], call["input"])
             result = tools.execute(
@@ -267,15 +287,20 @@ def run_agent_turn(
             saw_tool_result = True
             if not result.ok:
                 tool_error_count += 1
-            current_messages.append(
+            call_messages.append(
                 {
                     "role": "assistant_tool_call",
                     "toolUseId": call["id"],
                     "toolName": call["toolName"],
                     "input": call["input"],
+                    **(
+                        {"reasoningContent": next_step.reasoningContent}
+                        if getattr(next_step, "reasoningContent", None)
+                        else {}
+                    ),
                 }
             )
-            current_messages.append(
+            result_messages.append(
                 {
                     "role": "tool_result",
                     "toolUseId": call["id"],
@@ -285,10 +310,15 @@ def run_agent_turn(
                 }
             )
             if result.awaitUser:
+                current_messages.extend(call_messages)
+                current_messages.extend(result_messages)
                 if on_assistant_message:
                     on_assistant_message(result.output)
                 current_messages.append({"role": "assistant", "content": result.output})
                 return current_messages
+
+        current_messages.extend(call_messages)
+        current_messages.extend(result_messages)
 
     fallback = "Reached the maximum tool step limit for this turn."
     if on_assistant_message:

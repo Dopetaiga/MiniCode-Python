@@ -50,6 +50,51 @@ def test_agent_turn_executes_tool_and_returns_assistant() -> None:
     assert any(message["role"] == "tool_result" for message in messages)
 
 
+def test_agent_turn_groups_parallel_calls_before_their_results() -> None:
+    registry = ToolRegistry(
+        [
+            ToolDefinition(
+                name="echo",
+                description="echo tool",
+                input_schema={"type": "object"},
+                validator=lambda value: value,
+                run=lambda input_data, _context: ToolResult(
+                    ok=True, output=f"echo:{input_data['text']}"
+                ),
+            )
+        ]
+    )
+    model = ScriptedModel(
+        [
+            AgentStep(
+                type="tool_calls",
+                calls=[
+                    {"id": "1", "toolName": "echo", "input": {"text": "one"}},
+                    {"id": "2", "toolName": "echo", "input": {"text": "two"}},
+                ],
+            ),
+            AgentStep(type="assistant", content="done"),
+        ]
+    )
+
+    messages = run_agent_turn(
+        model=model,
+        tools=registry,
+        messages=[{"role": "system", "content": "sys"}],
+        cwd=".",
+    )
+
+    roles = [message["role"] for message in messages]
+    assert roles == [
+        "system",
+        "assistant_tool_call",
+        "assistant_tool_call",
+        "tool_result",
+        "tool_result",
+        "assistant",
+    ]
+
+
 def test_agent_turn_emits_callbacks() -> None:
     events: list[tuple[str, str]] = []
 
@@ -112,6 +157,21 @@ def test_agent_turn_retries_empty_response_then_continues() -> None:
         message["role"] == "user" and "last response was empty" in message["content"]
         for message in messages
     )
+
+
+def test_agent_turn_honors_cancellation_before_model_call() -> None:
+    model = ScriptedModel([AgentStep(type="assistant", content="should not run")])
+
+    messages = run_agent_turn(
+        model=model,
+        tools=ToolRegistry([]),
+        messages=[{"role": "system", "content": "sys"}],
+        cwd=".",
+        should_cancel=lambda: True,
+    )
+
+    assert model.calls == 0
+    assert messages[-1] == {"role": "assistant", "content": "Agent turn cancelled."}
 
 
 def test_agent_turn_handles_recoverable_pause_turn() -> None:

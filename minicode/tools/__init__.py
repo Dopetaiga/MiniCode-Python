@@ -31,56 +31,80 @@ from minicode.tools.web_search import web_search_tool
 from minicode.tools.write_file import write_file_tool
 
 
-def create_default_tool_registry(cwd: str, runtime: dict | None = None) -> ToolRegistry:
+def create_default_tool_registry(
+    cwd: str,
+    runtime: dict | None = None,
+    *,
+    include_subagents: bool = True,
+) -> ToolRegistry:
     skills = [asdict(skill) for skill in discover_skills(cwd)]
     mcp = create_mcp_backed_tools(cwd=cwd, mcp_servers=dict(runtime.get("mcpServers", {})) if runtime else {})
+    tools = [
+        # User interaction
+        ask_user_tool,
+        # File operations
+        list_files_tool,
+        grep_files_tool,
+        read_file_tool,
+        write_file_tool,
+        modify_file_tool,
+        edit_file_tool,
+        patch_file_tool,
+        # Command execution
+        run_command_tool,
+        run_with_debug_tool,
+        # Web tools
+        web_fetch_tool,
+        web_search_tool,
+        api_tester_tool,
+        # Task management
+        todo_write_tool,
+        # Git workflow
+        git_tool,
+        # Notebook editing
+        notebook_edit_tool,
+        # Code intelligence
+        find_symbols_tool,
+        find_references_tool,
+        get_ast_info_tool,
+        multi_edit_tool,
+        code_review_tool,
+        # Visualization
+        file_tree_tool,
+        diff_viewer_tool,
+        # Testing & Debugging
+        test_runner_tool,
+        # Database & Docker (NEW!)
+        db_explorer_tool,
+        docker_helper_tool,
+        # Governance audit
+        governance_audit_tool,
+        # Skills
+        create_load_skill_tool(cwd),
+        # MCP tools
+        *mcp["tools"],
+    ]
+    if include_subagents and runtime is not None:
+        from minicode.sub_agents import SubAgentManager
+        from minicode.tools.delegate_task import (
+            create_delegate_task_tool,
+            create_subagent_control_tool,
+        )
+
+        subagent_manager = SubAgentManager(parent_session_id="main-session", cwd=cwd)
+        tools.append(create_delegate_task_tool(cwd, runtime, manager=subagent_manager))
+        tools.append(create_subagent_control_tool(cwd, runtime, manager=subagent_manager))
+
+        def dispose_all() -> None:
+            subagent_manager.shutdown()
+            mcp["dispose"]()
+
+        disposer = dispose_all
+    else:
+        disposer = mcp["dispose"]
     return ToolRegistry(
-        [
-            # User interaction
-            ask_user_tool,
-            # File operations
-            list_files_tool,
-            grep_files_tool,
-            read_file_tool,
-            write_file_tool,
-            modify_file_tool,
-            edit_file_tool,
-            patch_file_tool,
-            # Command execution
-            run_command_tool,
-            run_with_debug_tool,
-            # Web tools
-            web_fetch_tool,
-            web_search_tool,
-            api_tester_tool,
-            # Task management
-            todo_write_tool,
-            # Git workflow
-            git_tool,
-            # Notebook editing
-            notebook_edit_tool,
-            # Code intelligence
-            find_symbols_tool,
-            find_references_tool,
-            get_ast_info_tool,
-            multi_edit_tool,
-            code_review_tool,
-            # Visualization
-            file_tree_tool,
-            diff_viewer_tool,
-            # Testing & Debugging
-            test_runner_tool,
-            # Database & Docker (NEW!)
-            db_explorer_tool,
-            docker_helper_tool,
-            # Governance audit
-            governance_audit_tool,
-            # Skills
-            create_load_skill_tool(cwd),
-            # MCP tools
-            *mcp["tools"],
-        ],
+        tools,
         skills=skills,
         mcp_servers=mcp["servers"],
-        disposer=mcp["dispose"],
+        disposer=disposer,
     )

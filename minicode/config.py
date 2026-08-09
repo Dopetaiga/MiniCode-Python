@@ -19,10 +19,14 @@ KNOWN_MODELS = [
     "claude-sonnet-4-20250514",
     "claude-opus-4-20250514",
     "claude-haiku-3-20240307",
+    "deepseek-v4-pro",
+    "deepseek-v4-flash",
     "gpt-4o",
     "gpt-4o-mini",
     "gpt-4-turbo",
 ]
+
+KNOWN_PROVIDERS = {"anthropic", "openai"}
 
 
 def _suggest_model_name(typed: str) -> str:
@@ -116,14 +120,40 @@ def save_mini_code_settings(updates: dict[str, Any]) -> None:
 def load_runtime_config(cwd: str | Path | None = None) -> dict[str, Any]:
     effective = load_effective_settings(cwd)
     env = {**dict(effective.get("env", {})), **os.environ}
+    anthropic_auth_token = str(env.get("ANTHROPIC_AUTH_TOKEN", "")).strip() or None
+    anthropic_api_key = str(env.get("ANTHROPIC_API_KEY", "")).strip() or None
+    openai_api_key = str(env.get("OPENAI_API_KEY", "")).strip() or None
+    configured_provider = str(
+        os.environ.get("MINI_CODE_PROVIDER")
+        or effective.get("provider")
+        or env.get("MINI_CODE_PROVIDER", "")
+    ).strip().lower()
+    if configured_provider:
+        provider = configured_provider
+    elif openai_api_key and not anthropic_auth_token and not anthropic_api_key:
+        provider = "openai"
+    else:
+        provider = "anthropic"
+    if provider not in KNOWN_PROVIDERS:
+        raise RuntimeError(
+            f"Unsupported provider '{provider}'. Choose one of: {', '.join(sorted(KNOWN_PROVIDERS))}."
+        )
+
+    provider_model_env = "OPENAI_MODEL" if provider == "openai" else "ANTHROPIC_MODEL"
     model = (
         os.environ.get("MINI_CODE_MODEL")
+        or os.environ.get(provider_model_env)
         or effective.get("model")
-        or str(env.get("ANTHROPIC_MODEL", "")).strip()
+        or str(env.get(provider_model_env, "")).strip()
     )
-    base_url = str(env.get("ANTHROPIC_BASE_URL", "")).strip() or "https://api.anthropic.com"
-    auth_token = str(env.get("ANTHROPIC_AUTH_TOKEN", "")).strip() or None
-    api_key = str(env.get("ANTHROPIC_API_KEY", "")).strip() or None
+    if provider == "openai":
+        base_url = str(env.get("OPENAI_BASE_URL", "")).strip() or "https://api.openai.com"
+        auth_token = None
+        api_key = openai_api_key
+    else:
+        base_url = str(env.get("ANTHROPIC_BASE_URL", "")).strip() or "https://api.anthropic.com"
+        auth_token = anthropic_auth_token
+        api_key = anthropic_api_key
     raw_max_output_tokens = (
         os.environ.get("MINI_CODE_MAX_OUTPUT_TOKENS")
         or effective.get("maxOutputTokens")
@@ -139,20 +169,46 @@ def load_runtime_config(cwd: str | Path | None = None) -> dict[str, Any]:
             max_output_tokens = None
 
     if not model:
-        raise RuntimeError("No model configured. Set ~/.mini-code/settings.json or ANTHROPIC_MODEL.")
-    if not auth_token and not api_key:
         raise RuntimeError(
-            "No auth configured. Set ANTHROPIC_AUTH_TOKEN or ANTHROPIC_API_KEY."
+            f"No model configured. Set ~/.mini-code/settings.json or {provider_model_env}."
         )
+    if not auth_token and not api_key:
+        expected_auth = "OPENAI_API_KEY" if provider == "openai" else "ANTHROPIC_AUTH_TOKEN or ANTHROPIC_API_KEY"
+        raise RuntimeError(f"No auth configured for {provider}. Set {expected_auth}.")
+
+    is_deepseek = "deepseek" in base_url.lower() or str(model).lower().startswith("deepseek-")
+    default_openai_tokens_param = "max_tokens" if is_deepseek else "max_completion_tokens"
+    openai_max_tokens_param = str(
+        env.get("OPENAI_MAX_TOKENS_PARAM", default_openai_tokens_param)
+    ).strip()
+    if openai_max_tokens_param not in {"max_completion_tokens", "max_tokens"}:
+        raise RuntimeError(
+            "OPENAI_MAX_TOKENS_PARAM must be 'max_completion_tokens' or 'max_tokens'."
+        )
+    thinking_mode = str(env.get("MINI_CODE_THINKING", "")).strip().lower() or None
+    if thinking_mode not in {None, "enabled", "disabled"}:
+        raise RuntimeError("MINI_CODE_THINKING must be 'enabled' or 'disabled'.")
+    reasoning_effort = str(env.get("MINI_CODE_REASONING_EFFORT", "")).strip().lower() or None
 
     return {
+        "provider": provider,
         "model": model,
         "baseUrl": base_url,
         "authToken": auth_token,
         "apiKey": api_key,
         "maxOutputTokens": max_output_tokens,
+        "openaiMaxTokensParam": openai_max_tokens_param,
+        "openaiOrganization": str(env.get("OPENAI_ORGANIZATION", "")).strip() or None,
+        "openaiProject": str(env.get("OPENAI_PROJECT", "")).strip() or None,
+        "thinkingMode": thinking_mode,
+        "reasoningEffort": reasoning_effort,
+        "authSource": (
+            "OPENAI_API_KEY"
+            if provider == "openai"
+            else ("ANTHROPIC_AUTH_TOKEN" if auth_token else "ANTHROPIC_API_KEY")
+        ),
         "mcpServers": effective.get("mcpServers", {}),
-        "sourceSummary": f"config: {MINI_CODE_SETTINGS_PATH} > {CLAUDE_SETTINGS_PATH} > process.env",
+        "sourceSummary": f"process.env > {MINI_CODE_SETTINGS_PATH} > {CLAUDE_SETTINGS_PATH}",
     }
 
 
@@ -215,9 +271,10 @@ def validate_config(cwd: str | Path | None = None) -> tuple[bool, list[str]]:
             help_msg = (
                 f"Error: {error_msg}\n\n"
                 "How to fix:\n"
-                "  1. Set model name: export ANTHROPIC_MODEL=claude-sonnet-4-20250514\n"
-                "  2. Or edit ~/.mini-code/settings.json:\n"
-                f'     {{"model": "claude-sonnet-4-20250514"}}\n'
+                "  1. Set MINI_CODE_PROVIDER to anthropic or openai.\n"
+                "  2. Set ANTHROPIC_MODEL or OPENAI_MODEL for that provider.\n"
+                "  3. Or edit ~/.mini-code/settings.json, for example:\n"
+                f'     {{"provider": "openai", "model": "deepseek-v4-pro"}}\n'
             )
             if suggestion:
                 help_msg += f"\n  Did you mean: {suggestion}?\n"
@@ -225,12 +282,15 @@ def validate_config(cwd: str | Path | None = None) -> tuple[bool, list[str]]:
             errors.append(help_msg)
             
         elif "No auth configured" in error_msg:
+            is_openai = "for openai" in error_msg
+            auth_name = "OPENAI_API_KEY" if is_openai else "ANTHROPIC_API_KEY"
+            auth_example = "your-openai-compatible-key" if is_openai else "sk-ant-..."
             help_msg = (
                 f"Error: {error_msg}\n\n"
                 "How to fix:\n"
-                "  1. Set API key: export ANTHROPIC_API_KEY=sk-ant-...\n"
+                f"  1. Set API key: export {auth_name}={auth_example}\n"
                 "  2. Or edit ~/.mini-code/settings.json:\n"
-                '     {"env": {"ANTHROPIC_API_KEY": "sk-ant-..."}}\n'
+                f'     {{"env": {{"{auth_name}": "{auth_example}"}}}}\n'
             )
             errors.append(help_msg)
         else:
@@ -269,7 +329,8 @@ def format_config_diagnostic(cwd: str | Path | None = None) -> str:
         lines.append("-" * 40)
         lines.append(f"  Model: {config.get('model', 'not set')}")
         lines.append(f"  Base URL: {config.get('baseUrl', 'not set')}")
-        auth_method = "ANTHROPIC_AUTH_TOKEN" if config.get("authToken") else ("ANTHROPIC_API_KEY" if config.get("apiKey") else "not set")
+        lines.append(f"  Provider: {config.get('provider', 'anthropic')}")
+        auth_method = config.get("authSource", "not set")
         lines.append(f"  Auth: {auth_method}")
         lines.append(f"  MCP Servers: {len(config.get('mcpServers', {}))}")
     except Exception:

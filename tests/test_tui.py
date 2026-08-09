@@ -44,7 +44,7 @@ def test_render_transcript_shows_intermediate_collapse_phase() -> None:
     rendered = render_transcript(transcript, scroll_offset=0)
 
     assert "run_command" in rendered
-    assert "collapsing" in rendered
+    assert "output collapsed" in rendered
 
 
 def test_render_transcript_shows_collapsed_summary_when_fully_collapsed() -> None:

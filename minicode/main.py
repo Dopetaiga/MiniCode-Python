@@ -7,6 +7,7 @@ from pathlib import Path
 
 from minicode.agent_loop import run_agent_turn
 from minicode.anthropic_adapter import AnthropicModelAdapter
+from minicode.openai_adapter import OpenAIModelAdapter
 from minicode.cli_commands import find_matching_slash_commands, try_handle_local_command
 from minicode.config import load_runtime_config
 from minicode.history import load_history_entries, save_history_entries
@@ -140,15 +141,16 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    # Initialize logging
-    from minicode.logging_config import setup_logging
-    setup_logging(level=args.log_level)
-
-    # Run config validation if requested
+    # Configuration validation is read-only and should not require creating a
+    # user-level log file before it can report diagnostics.
     if args.validate_config:
         from minicode.config import format_config_diagnostic
         print(format_config_diagnostic())
         return
+
+    # Initialize logging
+    from minicode.logging_config import setup_logging
+    setup_logging(level=args.log_level)
     
     # Run installer if requested
     if args.install:
@@ -175,11 +177,16 @@ def main() -> None:
         )
         print(
             "🔧 How to fix this:\n"
-            "  1. Set your model name: export ANTHROPIC_MODEL=claude-sonnet-4-20250514\n"
-            "  2. Set your API key: export ANTHROPIC_API_KEY=sk-ant-...\n"
-            "  3. Or edit ~/.mini-code/settings.json:\n"
-            '     {"model": "claude-sonnet-4-20250514", "env": {"ANTHROPIC_API_KEY": "sk-ant-..."}}\n'
-            "  4. Restart MiniCode\n\n"
+            "  OpenAI-compatible / DeepSeek:\n"
+            "    export MINI_CODE_PROVIDER=openai\n"
+            "    export OPENAI_MODEL=deepseek-v4-pro\n"
+            "    export OPENAI_BASE_URL=https://api.deepseek.com\n"
+            "    export OPENAI_API_KEY=your-key\n"
+            "  Anthropic:\n"
+            "    export MINI_CODE_PROVIDER=anthropic\n"
+            "    export ANTHROPIC_MODEL=claude-sonnet-4-20250514\n"
+            "    export ANTHROPIC_API_KEY=sk-ant-...\n"
+            "  Then restart MiniCode.\n\n"
             "📖 For more info: https://github.com/QUSETIONS/MiniCode-Python\n"
             "   Falling back to mock model for now...\n",
             file=sys.stderr,
@@ -188,11 +195,12 @@ def main() -> None:
     prompt_handler = _make_cli_permission_prompt() if sys.stdin.isatty() else None
     tools = create_default_tool_registry(cwd, runtime=runtime)
     permissions = PermissionManager(cwd, prompt=prompt_handler)
-    model = (
-        MockModelAdapter()
-        if runtime is None or os.environ.get("MINI_CODE_MODEL_MODE") == "mock"
-        else AnthropicModelAdapter(runtime, tools)
-    )
+    if runtime is None or os.environ.get("MINI_CODE_MODEL_MODE") == "mock":
+        model = MockModelAdapter()
+    elif runtime.get("provider") == "openai":
+        model = OpenAIModelAdapter(runtime, tools)
+    else:
+        model = AnthropicModelAdapter(runtime, tools)
     
     # Initialize ContextManager for context window management
     from minicode.context_manager import ContextManager
@@ -217,6 +225,7 @@ def main() -> None:
                 {
                     "skills": tools.get_skills(),
                     "mcpServers": tools.get_mcp_servers(),
+                    "subagents": tools.find("delegate_task") is not None,
                     "memory_context": memory_mgr.get_relevant_context(),  # Inject memory
                 },
             ),
@@ -296,6 +305,7 @@ def main() -> None:
                         {
                             "skills": tools.get_skills(),
                             "mcpServers": tools.get_mcp_servers(),
+                            "subagents": tools.find("delegate_task") is not None,
                         },
                     ),
                 }

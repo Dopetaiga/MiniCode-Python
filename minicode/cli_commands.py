@@ -217,9 +217,12 @@ def try_handle_local_command(user_input: str, tools=None) -> str | None:
             runtime = load_runtime_config()
         except Exception as error:  # noqa: BLE001
             return f"runtime not configured: {error}"
-        auth = "ANTHROPIC_AUTH_TOKEN" if runtime.get("authToken") else "ANTHROPIC_API_KEY"
+        auth = runtime.get("authSource") or (
+            "ANTHROPIC_AUTH_TOKEN" if runtime.get("authToken") else "ANTHROPIC_API_KEY"
+        )
         return "\n".join(
             [
+                f"provider: {runtime.get('provider', 'anthropic')}",
                 f"model: {runtime['model']}",
                 f"baseUrl: {runtime['baseUrl']}",
                 f"auth: {auth}",
