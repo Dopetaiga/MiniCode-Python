@@ -158,6 +158,23 @@ python -m minicode.release_readiness --check-release-markdown benchmarks/release
 
 CI 环境建议用 `--fail-on blocked`：provider warning 会被报告，但不会误伤本地产品门禁。发布候选如果要求 provider 和 fallback 都 ready，再用 `--fail-on warning`。`--examples-out` 只导出只读配置建议，不会写入凭据，也不会修改 MiniCode settings。`--doctor-out` 会额外导出一份给 CI 和 release bundle 使用的人工可读诊断报告，其中包含 primary provider、fallback coverage、configured/default fallback 和 live smoke 分离状态的 local preflight 清单。`--repair-plan-out` 会把同一修复路径导出为已脱敏 JSON，让 CI 可以审计下一步动作但不写入凭据。`--patch-preview-out` 会导出已脱敏的 settings merge patch 预览，方便先审查选定 fallback provider，再由人工合并到本地 settings。artifact manifest 命令会记录 readiness artifacts 的存在性、大小和 SHA-256，用于发现证据缺失或漂移。`--bundle-out` 会一次性写出 examples、doctor、repair plan、patch preview、离线 fallback simulations 和 manifest，是本地最低操作成本的检查入口。`--check-fallback-patch-preview` 会校验 patch preview 的 safety 字段、apply notes、merge patch 形态和脱敏状态。`--check-fallback-simulation` 会逐项校验离线模拟并拒绝任何 live provider 声明，不会调用 provider。`--check-readiness-bundle` 会把 bundle 作为一个整体校验 schema、manifest 和脱敏状态。`benchmarks/release_readiness.py` 默认只刷新报告；如果发布候选必须在 live-provider 风险上失败，使用 `python benchmarks/release_readiness.py --fail-on at-risk`。它也会校验 headless provider trace，确保 live-smoke 失败仍保留机器可读的 readiness 快照和 repair plan。`--check-fallback-evidence` 会校验 provider 风险是否配有 fallback 覆盖或可审计的 fallback 修复路径。`--check-release-report` 会校验完整 release JSON 的 schema 和证据链接；只要诊断证据完整，provider `at-risk` 不会被误判为本地门禁失败。`--check-release-markdown` 会校验人工可读 Markdown 报告是否覆盖 JSON 中的状态、smoke、provider、fallback 和 artifact 证据。
 
+## AgentBench 评测
+
+此分支把 MiniCode AgentBench v1.2 与运行时代码放在同一仓库。15 个任务覆盖
+证据检索、文件产物、代码修复、安全边界、跨文件修改，以及最新版同步
+`task` subagent 接口。8 个隐藏测试任务会先验证缺陷基线确实失败、oracle
+解法确实通过，然后才允许发起 live 模型实验。
+
+```powershell
+python benchmarks/run_agentbench.py
+python benchmarks/run_agentbench.py --live --runs 3
+```
+
+离线命令不会调用模型。v1.1 原始题集和脱敏后的 DSV4 Flash 历史报告分别
+保存在 `benchmarks/legacy/` 与 `benchmarks/results/`；完整口径见
+[评测协议](benchmarks/MINICODE_AGENTBENCH.md)。历史分数不会冒充 v1.2
+成绩；对最新版做性能声明前需要重新运行 v1.2。
+
 ## Typical Workflow
 
 ```mermaid

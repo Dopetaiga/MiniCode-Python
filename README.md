@@ -189,6 +189,25 @@ fallback, and artifact evidence as the release JSON. `--check-fallback-evidence`
 that provider risk is paired with fallback coverage or an auditable fallback
 repair path.
 
+## AgentBench evaluation
+
+This branch carries MiniCode AgentBench v1.2 together with the runtime. The
+15-task suite covers evidence retrieval, file artifacts, code repair, security,
+multi-file work, and the current synchronous `task` sub-agent interface. Its
+eight hidden-test tasks are checked against both a broken baseline and an oracle
+solution before any live model run starts.
+
+```bash
+python benchmarks/run_agentbench.py
+python benchmarks/run_agentbench.py --live --runs 3
+```
+
+The offline command makes no model request. Historical v1.1 fixtures and
+sanitized DSV4 Flash reports are preserved under `benchmarks/legacy/` and
+`benchmarks/results/`; see [the evaluation protocol](benchmarks/MINICODE_AGENTBENCH.md).
+Historical scores are not presented as v1.2 scores: rerun v1.2 before making a
+current-runtime performance claim.
+
 ## Typical Workflow
 
 ```mermaid

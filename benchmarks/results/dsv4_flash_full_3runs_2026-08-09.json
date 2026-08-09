@@ -1,0 +1,111 @@
+{
+  "benchmark": "MiniCode AgentBench v1.1",
+  "scope": "15 tasks, 3 independent runs per task",
+  "created_at": "2026-08-09",
+  "model": {
+    "provider": "openai-compatible",
+    "name": "deepseek-v4-flash"
+  },
+  "runner": {
+    "workspace_isolation": "per-episode temporary directory",
+    "process_isolation": "one spawned process per episode",
+    "episode_timeout_seconds": 180,
+    "checkpoint_after_each_episode": true,
+    "mcp_disabled": true,
+    "subagents_only_for_subagent_category": true,
+    "parent_tool_trace_only": true,
+    "container_security_boundary": false
+  },
+  "strict_result": {
+    "episodes_passed": 41,
+    "episodes_total": 45,
+    "success_rate": 0.9111,
+    "wilson_95_interval": [0.7927, 0.9649],
+    "tasks_passed_all_runs": 13,
+    "tasks_passed_any_run": 14,
+    "tasks_total": 15
+  },
+  "post_run_rubric_audit": {
+    "functional_episodes_passed": 42,
+    "episodes_total": 45,
+    "functional_success_rate": 0.9333,
+    "wilson_95_interval": [0.8214, 0.9771],
+    "adjustment": "subagent_evidence run 3 used subagent_control instead of delegate_task, but returned the required child evidence and completed status without a parent file read",
+    "resume_uses_conservative_strict_score": true,
+    "post_fix_validation": {
+      "task": "subagent_evidence",
+      "passed": 3,
+      "total": 3,
+      "included_in_main_45_episode_result": false,
+      "total_tokens": 30126
+    }
+  },
+  "by_category_strict": {
+    "artifact": {"passed": 3, "total": 3, "success_rate": 1.0},
+    "code_repair": {"passed": 6, "total": 6, "success_rate": 1.0},
+    "evidence": {"passed": 9, "total": 9, "success_rate": 1.0},
+    "implementation": {"passed": 6, "total": 9, "success_rate": 0.6667},
+    "multi_file": {"passed": 3, "total": 3, "success_rate": 1.0},
+    "security": {"passed": 6, "total": 6, "success_rate": 1.0},
+    "subagent": {"passed": 8, "total": 9, "success_rate": 0.8889}
+  },
+  "by_difficulty_strict": {
+    "easy": {"passed": 9, "total": 9, "success_rate": 1.0},
+    "medium": {"passed": 17, "total": 18, "success_rate": 0.9444},
+    "hard": {"passed": 15, "total": 18, "success_rate": 0.8333}
+  },
+  "hidden_verifier_result": {
+    "passed": 21,
+    "total": 24,
+    "success_rate": 0.875,
+    "wilson_95_interval": [0.69, 0.9566]
+  },
+  "per_task_strict": {
+    "evidence_read": [3, 3],
+    "evidence_search": [3, 3],
+    "evidence_synthesis": [3, 3],
+    "manifest_creation": [3, 3],
+    "repair_chunking": [3, 3],
+    "implement_user_normalization": [3, 3],
+    "implement_duration_parser": [3, 3],
+    "repair_safe_join": [3, 3],
+    "implement_deep_merge": [0, 3],
+    "repair_retry_schedule": [3, 3],
+    "implement_secret_redaction": [3, 3],
+    "repair_cross_file_invoice": [3, 3],
+    "subagent_evidence": [2, 3],
+    "parallel_subagent_synthesis": [3, 3],
+    "custom_subagent_routing": [3, 3]
+  },
+  "efficiency": {
+    "average_parent_tool_calls": 4.644,
+    "average_latency_seconds": 20.79,
+    "api_calls": 225,
+    "prompt_tokens": 627109,
+    "completion_tokens": 73943,
+    "total_tokens": 701052,
+    "prompt_cache_hit_tokens": 469120,
+    "prompt_cache_miss_tokens": 157989
+  },
+  "failure_analysis": [
+    {
+      "task": "implement_deep_merge",
+      "failed_runs": 3,
+      "classification": "model capability failure",
+      "evidence": "all three implementations used shallow copies; mutating the returned nested object mutated the base input"
+    },
+    {
+      "task": "subagent_evidence",
+      "failed_runs": 1,
+      "classification": "rubric false negative",
+      "evidence": "required evidence and completed child status were correct, but the original rubric accepted only delegate_task and not subagent_control"
+    }
+  ],
+  "limitations": [
+    "This is a project-level benchmark, not a SWE-bench or Terminal-Bench score.",
+    "Only one model configuration was evaluated.",
+    "The 15 fixtures are synthetic and smaller than real repositories.",
+    "Tool traces include parent calls only; token usage includes parent and sub-agents.",
+    "Workspace and process isolation are not a container security boundary."
+  ]
+}

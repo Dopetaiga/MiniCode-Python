@@ -1,0 +1,58 @@
+{
+  "benchmark": "MiniCode AgentBench v1",
+  "scope": "representative smoke subset only",
+  "created_at": "2026-08-09",
+  "model": {
+    "provider": "openai-compatible",
+    "name": "deepseek-v4-flash"
+  },
+  "runs_per_case": 1,
+  "statistically_generalizable": false,
+  "cases": [
+    {
+      "id": "repair_chunking",
+      "category": "code_repair",
+      "difficulty": "medium",
+      "passed": true,
+      "duration_seconds": 15.095,
+      "parent_tool_call_count": 4
+    },
+    {
+      "id": "repair_safe_join",
+      "category": "security",
+      "difficulty": "hard",
+      "passed": true,
+      "duration_seconds": 58.919,
+      "parent_tool_call_count": 8
+    },
+    {
+      "id": "parallel_subagent_synthesis",
+      "category": "subagent",
+      "difficulty": "hard",
+      "passed": true,
+      "duration_seconds": 12.042,
+      "parent_tool_call_count": 4
+    }
+  ],
+  "summary": {
+    "episodes_passed": 3,
+    "episodes_total": 3,
+    "episode_success_rate": 1.0,
+    "average_parent_tool_calls": 5.333,
+    "average_latency_seconds": 28.685,
+    "usage": {
+      "api_calls": 25,
+      "prompt_tokens": 88437,
+      "completion_tokens": 6064,
+      "total_tokens": 94501,
+      "prompt_cache_hit_tokens": 69632,
+      "prompt_cache_miss_tokens": 18805
+    }
+  },
+  "limitations": [
+    "Only three representative tasks were run.",
+    "Each task was run once.",
+    "Tool traces include parent calls only; token usage includes parent and sub-agents.",
+    "Workspace isolation is not a container security boundary."
+  ]
+}
