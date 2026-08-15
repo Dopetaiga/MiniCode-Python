@@ -1,7 +1,7 @@
 # MiniCode Python
 
 <p align="center">
-  <strong>一个面向本地开发的轻量级 coding agent：不只是聊天壳子，而是可恢复、可回放、可检查的终端工作流。</strong>
+  <strong>源码研读驱动的 MiniCode Python 独立复刻：从可运行 agent 到 memory、subagent 与可复现实验。</strong>
 </p>
 
 <p align="center">
@@ -9,7 +9,7 @@
   |
   <a href="https://github.com/LiuMengxuan04/MiniCode">MiniCode 主仓库</a>
   |
-  <a href="https://github.com/QUSETIONS/MiniCode-Python">Python 仓库</a>
+  <a href="./REIMPLEMENTATION.md">复刻与二次开发说明</a>
 </p>
 
 <p align="center">
@@ -26,7 +26,9 @@
   <em>这不是示意图，而是真实的 MiniCode 前端 Demo：首页直接把 memory、session、rewind 和 readiness 作为一等产品能力展示出来。</em>
 </p>
 
-MiniCode Python 是 MiniCode 家族里的 Python 运行时。它面向真实的本地开发场景：agent 不只是能调模型和工具，还要能跨长会话保留状态、回看历史、撤销错误编辑，并把自己的运行状态说清楚。
+MiniCode-Python 是我在研读 [MiniCode 主仓库](https://github.com/LiuMengxuan04/MiniCode)及其 Python 版本源码后，独立复刻、重新包装并持续二次开发的 Python coding-agent 项目。它不是对官方身份或“从零原创”的冒充；仓库保留上游来源与许可证，同时用可运行代码、测试和实验记录明确展示我实际完成的工程工作。
+
+复刻完成后，我继续把它扩展为面向真实本地开发的 agent runtime：支持持久会话、memory、checkpoint/rewind、provider readiness、有界 `task` subagent，以及可复现的 [LiteCodeBench](benchmarks/LITECODEBENCH.md)。实现边界和证据索引见[复刻与二次开发说明](REIMPLEMENTATION.md)。
 
 如果把 Claude Code 看成成熟的终端 agent 产品体验，那么 MiniCode Python 更像它的轻量级、本地优先版本：更强调运行时透明性、可持续会话、记忆连续性、可回退编辑，以及可验证行为。
 
@@ -99,7 +101,7 @@ MiniCode Python 是 MiniCode 家族里的 Python 运行时。它面向真实的�
 ### 1. 安装并启动
 
 ```bash
-git clone https://github.com/QUSETIONS/MiniCode-Python.git
+git clone https://github.com/Dopetaiga/MiniCode-Python.git
 cd MiniCode-Python
 python -m pip install -e .[dev]
 minicode-py
@@ -157,6 +159,28 @@ python -m minicode.release_readiness --check-release-markdown benchmarks/release
 ```
 
 CI 环境建议用 `--fail-on blocked`：provider warning 会被报告，但不会误伤本地产品门禁。发布候选如果要求 provider 和 fallback 都 ready，再用 `--fail-on warning`。`--examples-out` 只导出只读配置建议，不会写入凭据，也不会修改 MiniCode settings。`--doctor-out` 会额外导出一份给 CI 和 release bundle 使用的人工可读诊断报告，其中包含 primary provider、fallback coverage、configured/default fallback 和 live smoke 分离状态的 local preflight 清单。`--repair-plan-out` 会把同一修复路径导出为已脱敏 JSON，让 CI 可以审计下一步动作但不写入凭据。`--patch-preview-out` 会导出已脱敏的 settings merge patch 预览，方便先审查选定 fallback provider，再由人工合并到本地 settings。artifact manifest 命令会记录 readiness artifacts 的存在性、大小和 SHA-256，用于发现证据缺失或漂移。`--bundle-out` 会一次性写出 examples、doctor、repair plan、patch preview、离线 fallback simulations 和 manifest，是本地最低操作成本的检查入口。`--check-fallback-patch-preview` 会校验 patch preview 的 safety 字段、apply notes、merge patch 形态和脱敏状态。`--check-fallback-simulation` 会逐项校验离线模拟并拒绝任何 live provider 声明，不会调用 provider。`--check-readiness-bundle` 会把 bundle 作为一个整体校验 schema、manifest 和脱敏状态。`benchmarks/release_readiness.py` 默认只刷新报告；如果发布候选必须在 live-provider 风险上失败，使用 `python benchmarks/release_readiness.py --fail-on at-risk`。它也会校验 headless provider trace，确保 live-smoke 失败仍保留机器可读的 readiness 快照和 repair plan。`--check-fallback-evidence` 会校验 provider 风险是否配有 fallback 覆盖或可审计的 fallback 修复路径。`--check-release-report` 会校验完整 release JSON 的 schema 和证据链接；只要诊断证据完整，provider `at-risk` 不会被误判为本地门禁失败。`--check-release-markdown` 会校验人工可读 Markdown 报告是否覆盖 JSON 中的状态、smoke、provider、fallback 和 artifact 证据。
+
+## LiteCodeBench 评测
+
+此分支把面向 MiniCode-Python 的 LiteCodeBench v1.0 与运行时代码放在同一仓库。15 个任务覆盖
+证据检索、文件产物、代码修复、安全边界、跨文件修改，以及最新版同步
+`task` subagent 接口。8 个隐藏测试任务会先验证缺陷基线确实失败、oracle
+解法确实通过，然后才允许发起 live 模型实验。
+
+```powershell
+python benchmarks/run_litecodebench.py
+python benchmarks/run_litecodebench.py --live --runs 3
+```
+
+离线命令不会调用模型。v1.1 原始题集和脱敏后的 DSV4 Flash 历史报告分别
+保存在 `benchmarks/legacy/` 与 `benchmarks/results/`；完整口径见
+[评测协议](benchmarks/LITECODEBENCH.md)。历史分数不会冒充当前版本
+成绩；对最新版做性能声明前需要重新运行 v1.2。
+
+2026-08-15 的 DSV4 单轮实验先取得 14/15，并暴露 deep merge 浅拷贝别名问题；
+在明确“返回值不得保留任一输入的可变别名”并加强双侧 verifier 后，干净
+worktree 复验为 15/15。两次运行的契约不同，不能包装成模型性能直接提升；详见
+[LiteCodeBench 完整报告](benchmarks/results/LITECODEBENCH_DSV4_REPORT_2026-08-15.md)。
 
 ## Typical Workflow
 
@@ -292,20 +316,21 @@ flowchart LR
 | `minicode/runtime_profiles.py` | `single`、`single-deep` 等 runtime profile。 |
 | `minicode/cybernetic_orchestrator.py` | runtime control 生命周期总控。 |
 
-## MiniCode Family
+## 项目来源与定位
 
-| 版本 | 仓库 | 侧重点 |
+| 代码线 | 仓库 | 与本项目的关系 |
 | --- | --- | --- |
-| TypeScript | [LiuMengxuan04/MiniCode](https://github.com/LiuMengxuan04/MiniCode) | 主线终端 agent、TUI、MCP、skills、session 和 context control。 |
-| Python | [QUSETIONS/MiniCode-Python](https://github.com/QUSETIONS/MiniCode-Python) | 本地优先的 Python runtime，强化了 session、rewind、readiness 和 observability。 |
-| Rust | [harkerhand/MiniCode-rs](https://github.com/harkerhand/MiniCode-rs/tree/master) | 偏系统侧实现与实验。 |
-| Java | [hobbescalvin414-tech/minicode4j](https://github.com/hobbescalvin414-tech/minicode4j/tree/feat/default-ts-ui) | Java 实现，沿着 TypeScript 风格 UI 方向演进。 |
+| 学习来源 | [LiuMengxuan04/MiniCode](https://github.com/LiuMengxuan04/MiniCode) | 用于理解 agent loop、工具调用和终端交互设计。 |
+| Python 复刻与二次开发 | [Dopetaiga/MiniCode-Python](https://github.com/Dopetaiga/MiniCode-Python) | 独立复刻核心流程，并继续实现 memory、恢复、subagent、readiness 与评测。 |
+
+这段关系不是一句模糊的 “fork 后修改”。[REIMPLEMENTATION.md](REIMPLEMENTATION.md) 将学习来源、复刻范围、后续扩展和可验证证据拆开记录，便于代码审查或面试追问。
 
 ## Documentation
 
 如果你想继续看更深的实现与产品化记录，可以从这里开始：
 
 - [English README](./README.md)
+- [复刻与二次开发说明](./REIMPLEMENTATION.md)
 - [Optimization Summary](./Docs/Documentation/OPTIMIZATION_SUMMARY.md)
 - [Memory Theory](./Docs/Documentation/memory_theory.md)
 - [Minicode-lite Productization Design](./Docs/Documentation/superpowers/specs/2026-06-05-minicode-lite-productization-design.md)

@@ -8,7 +8,16 @@ version = "0.1.0"
 description = "A lightweight terminal coding assistant for local development workflows."
 readme = "README.md"
 requires-python = ">=3.11"
+authors = [{ name = "Dopetaiga" }]
+license = { file = "LICENSE" }
+keywords = ["coding-agent", "llm-agent", "memory", "subagent", "evaluation"]
 dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/Dopetaiga/MiniCode-Python"
+Repository = "https://github.com/Dopetaiga/MiniCode-Python"
+Issues = "https://github.com/Dopetaiga/MiniCode-Python/issues"
+Benchmark = "https://github.com/Dopetaiga/MiniCode-Python/blob/main/benchmarks/LITECODEBENCH.md"
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0.0", "hypothesis>=6.0.0", "setuptools>=68"]

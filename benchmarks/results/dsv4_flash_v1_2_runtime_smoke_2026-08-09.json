@@ -1,0 +1,75 @@
+{
+  "created_at": "2026-08-09T07:47:58.634094+00:00",
+  "benchmark": "MiniCode DSV4 smoke pack v1.2",
+  "preflight": {
+    "case_count": 2,
+    "case_ids": [
+      "read_fact",
+      "subagent_delegation"
+    ],
+    "provider": "anthropic",
+    "model": "deepseek-v4-flash",
+    "base_url": "https://api.stepfun.com/step_plan",
+    "api_key_present": true,
+    "thinking": "",
+    "provider_detection": "offline local candidate; no model-catalog probe",
+    "config_error": null
+  },
+  "live_routes": [
+    {
+      "adapter": "OpenAIModelAdapter",
+      "provider": "openai-compatible",
+      "base_url": "https://api.deepseek.com"
+    }
+  ],
+  "model": "deepseek-v4-flash",
+  "thinking": "",
+  "passed": 2,
+  "total": 2,
+  "results": [
+    {
+      "id": "read_fact",
+      "category": "single_tool",
+      "adapter": "OpenAIModelAdapter",
+      "provider": "openai-compatible",
+      "base_url": "https://api.deepseek.com",
+      "passed": true,
+      "failures": [],
+      "tool_calls": [
+        "read_file"
+      ],
+      "tool_events": [
+        {
+          "name": "read_file",
+          "input": {
+            "path": "facts/project.txt"
+          }
+        }
+      ],
+      "final_text": "Orion-7"
+    },
+    {
+      "id": "subagent_delegation",
+      "category": "subagent",
+      "adapter": "OpenAIModelAdapter",
+      "provider": "openai-compatible",
+      "base_url": "https://api.deepseek.com",
+      "passed": true,
+      "failures": [],
+      "tool_calls": [
+        "task"
+      ],
+      "tool_events": [
+        {
+          "name": "task",
+          "input": {
+            "description": "Read facts/delegated.txt",
+            "prompt": "Use read_file to read the file facts/delegated.txt in the current workspace. Report back the exact full contents of the file, verbatim. Do not modify anything — this is a read-only task.",
+            "agent_type": "explore"
+          }
+        }
+      ],
+      "final_text": "The delegated sub-agent successfully read `facts/delegated.txt` (read-only, no modifications). Its exact contents, verbatim:\n\n```\ndelegated marker: cobalt-29\n```\n\nThe delegated marker is: **cobalt-29**"
+    }
+  ]
+}

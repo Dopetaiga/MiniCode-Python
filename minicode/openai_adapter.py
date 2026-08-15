@@ -193,6 +193,11 @@ class OpenAIModelAdapter:
         self.tools = tools
         self._cached_tools_json: list[dict[str, Any]] | None = None
         self._tools_cache_key: int = 0
+        # DeepSeek-style reasoning models require the assistant's opaque
+        # reasoning_content to be replayed with the following tool result.
+        # Keep it adapter-local so it never leaks into the visible transcript.
+        self._pending_reasoning_content = ""
+        self._reasoning_by_tool_call_id: dict[str, str] = {}
     
     def _get_serialized_tools(self) -> list[dict[str, Any]]:
         """Get serialized tool list in OpenAI function format with caching."""
@@ -221,6 +226,41 @@ class OpenAIModelAdapter:
         store: Store[AppState] | None = None,
     ) -> AgentStep:
         system_message, converted_messages = _to_openai_messages(messages)
+
+        attached_reasoning = False
+        for index, message in enumerate(converted_messages):
+            if message.get("role") != "assistant":
+                continue
+            call_ids = [
+                str(call.get("id", ""))
+                for call in message.get("tool_calls", [])
+                if isinstance(call, dict)
+            ]
+            reasoning = next(
+                (
+                    self._reasoning_by_tool_call_id[call_id]
+                    for call_id in call_ids
+                    if call_id in self._reasoning_by_tool_call_id
+                ),
+                "",
+            )
+            if reasoning:
+                converted_messages[index] = {
+                    **message,
+                    "reasoning_content": reasoning,
+                }
+                attached_reasoning = True
+
+        if self._pending_reasoning_content and not attached_reasoning:
+            for index in range(len(converted_messages) - 1, -1, -1):
+                message = converted_messages[index]
+                if message.get("role") == "assistant":
+                    converted_messages[index] = {
+                        **message,
+                        "reasoning_content": self._pending_reasoning_content,
+                    }
+                    break
+            self._pending_reasoning_content = ""
         
         request_body: dict[str, Any] = {
             "model": self.runtime["model"],
@@ -319,10 +359,14 @@ class OpenAIModelAdapter:
                 raise RuntimeError(
                     "OpenAI-compatible endpoint returned a non-JSON success payload."
                 )
+
+            usage = data.get("usage", {})
+            usage_sink = self.runtime.get("usageSink")
+            if isinstance(usage, dict) and callable(usage_sink):
+                usage_sink(dict(usage))
             
             # Cost tracking
             if store:
-                usage = data.get("usage", {})
                 input_tokens = usage.get("prompt_tokens", 0)
                 output_tokens = usage.get("completion_tokens", 0)
                 cost_usd = calculate_cost(
@@ -342,6 +386,13 @@ class OpenAIModelAdapter:
             choice = choices[0]
             message = choice.get("message", {})
             text_content = message.get("content", "") or ""
+            reasoning_content = (
+                message.get("reasoning_content")
+                or message.get("reasoning")
+                or ""
+            )
+            if isinstance(reasoning_content, str):
+                self._pending_reasoning_content = reasoning_content
             tool_calls_raw = message.get("tool_calls", [])
             
             stop_reason = choice.get("finish_reason")
@@ -359,6 +410,13 @@ class OpenAIModelAdapter:
                         "toolName": func.get("name", ""),
                         "input": parsed_input,
                     })
+            if self._pending_reasoning_content:
+                for call in tool_calls:
+                    call_id = str(call.get("id", ""))
+                    if call_id:
+                        self._reasoning_by_tool_call_id[call_id] = (
+                            self._pending_reasoning_content
+                        )
             
             parsed_text, kind = _parse_assistant_text(text_content.strip())
             diagnostics = StepDiagnostics(
@@ -395,6 +453,7 @@ class OpenAIModelAdapter:
         stop_reason = None
         stream_input_tokens = 0
         stream_output_tokens = 0
+        reasoning_parts: list[str] = []
         
         for line in response:
             line_str = line.decode("utf-8").strip()
@@ -427,6 +486,12 @@ class OpenAIModelAdapter:
             if content:
                 text_parts.append(content)
                 on_stream_chunk(content)
+
+            reasoning_delta = delta.get("reasoning_content") or delta.get("reasoning")
+            if isinstance(reasoning_delta, str) and reasoning_delta:
+                reasoning_parts.append(reasoning_delta)
+                if on_thinking_delta:
+                    on_thinking_delta(reasoning_delta)
             
             # Tool calls (incremental)
             tc_deltas = delta.get("tool_calls", [])
@@ -459,6 +524,24 @@ class OpenAIModelAdapter:
                 "input": parsed_input,
             })
         
+        self._pending_reasoning_content = "".join(reasoning_parts)
+        if self._pending_reasoning_content:
+            for call in tool_calls:
+                call_id = str(call.get("id", ""))
+                if call_id:
+                    self._reasoning_by_tool_call_id[call_id] = (
+                        self._pending_reasoning_content
+                    )
+
+        usage_sink = self.runtime.get("usageSink")
+        if callable(usage_sink):
+            usage_sink(
+                {
+                    "prompt_tokens": stream_input_tokens,
+                    "completion_tokens": stream_output_tokens,
+                }
+            )
+
         # Streaming cost tracking
         if store:
             # Estimate if not provided in stream

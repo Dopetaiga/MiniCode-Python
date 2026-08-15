@@ -207,6 +207,7 @@ def test_load_runtime_config_prefers_settings_env_for_openai_runtime(monkeypatch
         config_module,
         "load_effective_settings",
         lambda cwd=None: {
+            "provider": "openai",
             "model": "gpt5.5",
             "env": {
                 "OPENAI_BASE_URL": "https://www.cctq.ai",
@@ -223,6 +224,7 @@ def test_load_runtime_config_prefers_settings_env_for_openai_runtime(monkeypatch
 
     assert runtime["model"] == "gpt5.5"
     assert runtime["configuredModel"] == "gpt5.5"
+    assert runtime["configuredProvider"] == "openai"
     assert runtime["openaiBaseUrl"] == "https://www.cctq.ai"
     assert runtime["openaiApiKey"] == "fresh-openai-token"
 
