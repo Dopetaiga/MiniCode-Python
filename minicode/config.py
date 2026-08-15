@@ -654,6 +654,7 @@ def load_runtime_config(
     return {
         "model": model,
         "configuredModel": model,
+        "configuredProvider": str(effective.get("provider", "")).strip().lower(),
         "baseUrl": base_url,
         "authToken": auth_token,
         "apiKey": api_key,

@@ -1,6 +1,6 @@
-# MiniCode AgentBench v1.2
+# LiteCodeBench v1.0
 
-MiniCode AgentBench v1.2 是面向 **MiniCode Python 版** 的项目级执行式评测。它测量 Agent 是否真的读取证据、修改文件、通过隐藏测试并正确调度 subagent，而不只判断最终回答是否“看起来合理”。
+LiteCodeBench v1.0 是面向 **MiniCode-Python** 的项目级执行式评测。它测量 Agent 是否真的读取证据、修改文件、通过隐藏测试并正确调度 subagent，而不只判断最终回答是否“看起来合理”。早期开发名为 MiniCode AgentBench v1.2；此次只统一评测品牌，不改变历史实验事实。
 
 它适合作为项目实验与简历证据，但不是公共排行榜，也不能把结果直接写成 SWE-bench 或 Terminal-Bench 成绩。
 
@@ -49,7 +49,7 @@ MiniCode AgentBench v1.2 是面向 **MiniCode Python 版** 的项目级执行式
 
 ## 版本与上游更新说明
 
-- `benchmarks/minicode_agentbench_v1.jsonl` 是适配最新 `main`（`2141e8d`）的 v1.2：最新版 subagent 入口为同步 `task` 工具，支持 `explore`、`plan`、`general` 三种路由。
+- `benchmarks/litecodebench_v1.jsonl` 是适配 `main`（`2141e8d`）的 LiteCodeBench v1.0：最新版 subagent 入口为同步 `task` 工具，支持 `explore`、`plan`、`general` 三种路由。
 - `benchmarks/legacy/minicode_agentbench_v1_1.jsonl` 原样保存旧分支 v1.1，继续作为历史 DSV4 Flash 结果的题集证据。
 - v1.1 使用 `delegate_task`/`subagent_control`，包含后台并行与自定义 agent 文件；v1.2 不把这些旧接口伪装成最新版能力，而是改测当前真实公开接口。
 - 两个版本的 subagent rubric 不同，因此旧版 91.11% 不能直接当作最新版 v1.2 成绩；最新版必须重新运行后单独报告。
@@ -65,13 +65,13 @@ MiniCode AgentBench v1.2 是面向 **MiniCode Python 版** 的项目级执行式
 在项目目录中执行离线自检，不会调用 API：
 
 ```powershell
-.\.venv\Scripts\python.exe benchmarks\run_agentbench.py
+.\.venv\Scripts\python.exe benchmarks\run_litecodebench.py
 ```
 
 运行 3 个代表性任务各一次：
 
 ```powershell
-.\.venv\Scripts\python.exe benchmarks\run_agentbench.py --live `
+.\.venv\Scripts\python.exe benchmarks\run_litecodebench.py --live `
   --case repair_chunking `
   --case repair_safe_join `
   --case dual_subagent_synthesis
@@ -80,10 +80,20 @@ MiniCode AgentBench v1.2 是面向 **MiniCode Python 版** 的项目级执行式
 正式实验建议每题独立运行 3 次，共 45 个 episode：
 
 ```powershell
-.\.venv\Scripts\python.exe benchmarks\run_agentbench.py --live --runs 3
+.\.venv\Scripts\python.exe benchmarks\run_litecodebench.py --live --runs 3
 ```
 
-先用代表子集估算 token、时延和失败类型，再决定是否跑完整 45 次。默认报告写入 `test_results/minicode-agentbench-v1-2.json`；该目录应保持为本地运行产物，避免把冗长模型输出或环境信息直接提交。
+先用代表子集估算 token、时延和失败类型，再决定是否跑完整 45 次。默认报告写入 `test_results/litecodebench-v1.json`；该目录应保持为本地运行产物，避免把冗长模型输出或环境信息直接提交。
+
+## 2026-08-15 DSV4 全量实验与整改
+
+- 原始单轮：14/15；唯一失败为 `implement_deep_merge` 的嵌套对象浅拷贝。
+- 根因审计发现原 prompt 的“不修改输入”和 verifier 实际要求的“返回值不保留可变别名”存在规格强度差异。
+- 改进没有放宽测试：prompt 明确 alias-freedom，并新增 override 侧字典/列表反向变异测试。
+- 干净发布 worktree 上的增强单轮：15/15，Wilson 95% 区间为 79.61%–100%。
+- 两次运行不可直接当作同一题集上的性能提升；完整分析、限制与面试表述见 [`results/LITECODEBENCH_DSV4_REPORT_2026-08-15.md`](results/LITECODEBENCH_DSV4_REPORT_2026-08-15.md)。
+
+机器报告分别见 [`results/litecodebench_v1_dsv4_full_1run_2026-08-15.json`](results/litecodebench_v1_dsv4_full_1run_2026-08-15.json) 与 [`results/litecodebench_v1_dsv4_full_improved_1run_2026-08-15.json`](results/litecodebench_v1_dsv4_full_improved_1run_2026-08-15.json)。单轮 15/15 不是稳定总体成功率，正式结论仍需 3 轮或更多重复实验。
 
 ## 最新 `main` 的 v1.2 连通性验证
 

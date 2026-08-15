@@ -1,4 +1,4 @@
-"""Run MiniCode AgentBench v1.2 with offline oracle checks or a live model.
+"""Run LiteCodeBench v1.0 with offline oracle checks or a live model.
 
 The default mode is free and deterministic: it validates task schemas and proves
 that each hidden verifier rejects the broken fixture and accepts the oracle
@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import multiprocessing
 import os
 import queue
@@ -24,9 +25,9 @@ from typing import Any
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-CASES_PATH = Path(__file__).with_name("minicode_agentbench_v1.jsonl")
-DEFAULT_OUTPUT = PROJECT_ROOT / "test_results" / "minicode-agentbench-v1-2.json"
-BENCHMARK_NAME = "MiniCode AgentBench v1.2"
+CASES_PATH = Path(__file__).with_name("litecodebench_v1.jsonl")
+DEFAULT_OUTPUT = PROJECT_ROOT / "test_results" / "litecodebench-v1.json"
+BENCHMARK_NAME = "LiteCodeBench v1.0 (MiniCode-Python profile)"
 VERIFY_TIMEOUT_SECONDS = 30
 MAX_CAPTURE_CHARS = 8_000
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -204,7 +205,7 @@ def readiness(cases: list[dict[str, Any]]) -> dict[str, Any]:
         "base_url": "",
         "api_key_present": False,
         "thinking": "",
-        "provider_detection": "offline local candidate; no model-catalog probe",
+        "provider_detection": "offline heuristic; no model-catalog probe",
         "config_error": None,
         "runtime_compatibility": {
             "subagent_tool": "task",
@@ -219,9 +220,15 @@ def readiness(cases: list[dict[str, Any]]) -> dict[str, Any]:
         from minicode.model_registry import Provider, detect_provider
 
         runtime = load_runtime_config(PROJECT_ROOT)
-        provider = detect_provider(
-            runtime.get("model", ""), runtime, probe_openai_models=False
-        )
+        configured_provider = str(runtime.get("configuredProvider", "")).strip().lower()
+        known_providers = {candidate.value: candidate for candidate in Provider}
+        if configured_provider in known_providers:
+            provider = known_providers[configured_provider]
+            state["provider_detection"] = "explicit settings.provider; no model-catalog probe"
+        else:
+            provider = detect_provider(
+                runtime.get("model", ""), runtime, probe_openai_models=False
+            )
     except Exception as error:  # noqa: BLE001
         state["config_error"] = f"{type(error).__name__}: {error}"
         return state
@@ -580,6 +587,35 @@ def _rate(passed: int, total: int) -> float:
     return round(passed / total, 4) if total else 0.0
 
 
+def _wilson_interval(passed: int, total: int, z: float = 1.959963984540054) -> dict[str, float]:
+    """Return a Wilson score interval without claiming benchmark generality."""
+    if total <= 0:
+        return {"lower": 0.0, "upper": 0.0}
+    proportion = passed / total
+    denominator = 1 + z * z / total
+    center = (proportion + z * z / (2 * total)) / denominator
+    margin = (
+        z
+        * math.sqrt(
+            proportion * (1 - proportion) / total
+            + z * z / (4 * total * total)
+        )
+        / denominator
+    )
+    return {
+        "lower": round(max(0.0, center - margin), 4),
+        "upper": round(min(1.0, center + margin), 4),
+    }
+
+
+def _nearest_rank(values: list[float], percentile: float) -> float:
+    if not values:
+        return 0.0
+    ordered = sorted(values)
+    rank = max(1, math.ceil(percentile * len(ordered)))
+    return ordered[rank - 1]
+
+
 def summarize(episodes: list[dict[str, Any]]) -> dict[str, Any]:
     grouped_category: dict[str, list[dict[str, Any]]] = defaultdict(list)
     grouped_difficulty: dict[str, list[dict[str, Any]]] = defaultdict(list)
@@ -604,12 +640,26 @@ def summarize(episodes: list[dict[str, Any]]) -> dict[str, Any]:
         }
 
     passed = sum(episode["passed"] for episode in episodes)
+    durations = [float(episode["duration_seconds"]) for episode in episodes]
+    ordered_durations = sorted(durations)
+    if not ordered_durations:
+        median_duration = 0.0
+    elif len(ordered_durations) % 2:
+        median_duration = ordered_durations[len(ordered_durations) // 2]
+    else:
+        midpoint = len(ordered_durations) // 2
+        median_duration = (
+            ordered_durations[midpoint - 1] + ordered_durations[midpoint]
+        ) / 2
+    prompt_tokens = float(total_usage.get("prompt_tokens", 0))
+    cache_hit_tokens = float(total_usage.get("prompt_cache_hit_tokens", 0))
     task_all = sum(all(item["passed"] for item in items) for items in grouped_task.values())
     task_any = sum(any(item["passed"] for item in items) for items in grouped_task.values())
     return {
         "episodes_passed": passed,
         "episodes_total": len(episodes),
         "episode_success_rate": _rate(passed, len(episodes)),
+        "episode_success_wilson_95": _wilson_interval(passed, len(episodes)),
         "tasks_passed_all_runs": task_all,
         "tasks_passed_any_run": task_any,
         "tasks_total": len(grouped_task),
@@ -624,6 +674,20 @@ def summarize(episodes: list[dict[str, Any]]) -> dict[str, Any]:
             sum(item["duration_seconds"] for item in episodes) / len(episodes), 3
         )
         if episodes
+        else 0.0,
+        "latency_seconds": {
+            "median": round(median_duration, 3),
+            "p95_nearest_rank": round(_nearest_rank(durations, 0.95), 3),
+            "maximum": round(max(durations), 3) if durations else 0.0,
+        },
+        "average_api_calls": round(total_usage.get("api_calls", 0) / len(episodes), 3)
+        if episodes
+        else 0.0,
+        "average_total_tokens": round(total_usage.get("total_tokens", 0) / len(episodes), 3)
+        if episodes
+        else 0.0,
+        "prompt_cache_hit_rate": round(cache_hit_tokens / prompt_tokens, 4)
+        if prompt_tokens
         else 0.0,
         "usage": dict(total_usage),
     }

@@ -121,8 +121,8 @@ jobs:
           Package/EngineeringStructure/Test/Application/Query/ProductRootProjection.Test.py
           Package/EngineeringStructure/Test/Application/Query/StructureCompliance.Test.py
 
-      - name: Run AgentBench offline oracle gate
-        run: python benchmarks/run_agentbench.py
+      - name: Run LiteCodeBench offline oracle gate
+        run: python benchmarks/run_litecodebench.py
 
       - name: Run test suite
         run: python -m pytest -q --tb=short
