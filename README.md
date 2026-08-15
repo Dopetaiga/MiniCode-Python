@@ -1,7 +1,7 @@
 # MiniCode Python
 
 <p align="center">
-  <strong>A lightweight local coding agent for developers who want durable terminal workflows, not just a chat wrapper.</strong>
+  <strong>An independently recreated MiniCode Python runtime, extended with memory, subagents, recovery, and reproducible evaluation.</strong>
 </p>
 
 <p align="center">
@@ -9,7 +9,7 @@
   |
   <a href="https://github.com/LiuMengxuan04/MiniCode">MiniCode Main Repo</a>
   |
-  <a href="https://github.com/QUSETIONS/MiniCode-Python">Python Repo</a>
+  <a href="./REIMPLEMENTATION.md">Reimplementation Record</a>
 </p>
 
 <p align="center">
@@ -26,7 +26,9 @@
   <em>Real MiniCode frontend demo, not a mock: the landing page now reflects the current Python runtime and shows memory, session, rewind, and readiness as first-class product surfaces.</em>
 </p>
 
-MiniCode Python is the Python runtime in the MiniCode family. It is built for local development where the agent needs to survive long sessions, keep its state inspectable, recover from bad edits, and show what it is doing while it works.
+MiniCode-Python is my independent Python recreation and continuing engineering extension of [MiniCode](https://github.com/LiuMengxuan04/MiniCode), produced after studying its source and Python implementation. It does not claim official status or pretend to be a clean-room original: upstream provenance and licensing stay visible, while runnable code, tests, and experiment artifacts show the work I actually completed.
+
+After recreating the core agent, I extended it into a local-first runtime with durable sessions, memory, checkpoint/rewind, provider readiness, bounded `task` subagents, and the reproducible [LiteCodeBench](benchmarks/LITECODEBENCH.md). See the [reimplementation record](REIMPLEMENTATION.md) for the boundary and evidence map.
 
 If Claude Code represents the polished terminal-agent experience, MiniCode Python is the lightweight, local-first version that leans harder into runtime transparency, durable sessions, memory-backed continuity, rewindability, and verifiable behavior.
 
@@ -99,7 +101,7 @@ With the current repository state, you can already:
 ### 1. Install and launch
 
 ```bash
-git clone https://github.com/QUSETIONS/MiniCode-Python.git
+git clone https://github.com/Dopetaiga/MiniCode-Python.git
 cd MiniCode-Python
 python -m pip install -e .[dev]
 minicode-py
@@ -350,14 +352,14 @@ What matters is not the diagram itself. What matters is that runtime state is tr
 | `minicode/runtime_profiles.py` | Runtime profiles such as `single` and `single-deep`. |
 | `minicode/cybernetic_orchestrator.py` | Runtime control lifecycle facade. |
 
-## MiniCode Family
+## Origin and Project Positioning
 
-| Version | Repository | Focus |
+| Code line | Repository | Relationship to this project |
 | --- | --- | --- |
-| TypeScript | [LiuMengxuan04/MiniCode](https://github.com/LiuMengxuan04/MiniCode) | Mainline terminal agent, TUI, MCP, skills, sessions, and context controls. |
-| Python | [QUSETIONS/MiniCode-Python](https://github.com/QUSETIONS/MiniCode-Python) | Local-first Python runtime with stronger session, rewind, readiness, and observability surfaces. |
-| Rust | [harkerhand/MiniCode-rs](https://github.com/harkerhand/MiniCode-rs/tree/master) | Systems-side implementation and experiments. |
-| Java | [hobbescalvin414-tech/minicode4j](https://github.com/hobbescalvin414-tech/minicode4j/tree/feat/default-ts-ui) | Java implementation with a TypeScript-style UI direction. |
+| Study source | [LiuMengxuan04/MiniCode](https://github.com/LiuMengxuan04/MiniCode) | Used to understand the agent loop, tool execution, and terminal interaction design. |
+| Python recreation and extensions | [Dopetaiga/MiniCode-Python](https://github.com/Dopetaiga/MiniCode-Python) | Recreates the core flow and adds memory, recovery, subagents, readiness, and evaluation. |
+
+This is more precise than calling the repository merely a modified fork. [REIMPLEMENTATION.md](REIMPLEMENTATION.md) separates the studied source, recreated scope, later extensions, and verifiable evidence for review or interviews.
 
 ## Documentation
 
@@ -365,6 +367,7 @@ Start here if you want the deeper implementation and productization record:
 
 
 - [Chinese README](./README.zh-CN.md)
+- [Reimplementation and extension record](./REIMPLEMENTATION.md)
 - [Optimization Summary](./Docs/Documentation/OPTIMIZATION_SUMMARY.md)
 - [Memory Theory](./Docs/Documentation/memory_theory.md)
 - [Minicode-lite Productization Design](./Docs/Documentation/superpowers/specs/2026-06-05-minicode-lite-productization-design.md)
