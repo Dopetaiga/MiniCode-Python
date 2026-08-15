@@ -28,7 +28,7 @@
 
 ## Fork 二次开发 / Fork Development
 
-这是 [`QUSETIONS/MiniCode-Python`](https://github.com/QUSETIONS/MiniCode-Python) 的个人 fork，当前二次开发线基于上游提交 [`0760162`](https://github.com/QUSETIONS/MiniCode-Python/commit/0760162edded7f787ceb05d98c04cc53f615c2cc)。本分支在保留轻量终端 Agent 结构的基础上，重点新增：
+这是 [`QUSETIONS/MiniCode-Python`](https://github.com/QUSETIONS/MiniCode-Python) 的个人 fork，当前二次开发线基于上游提交 [`0760162`](https://github.com/QUSETIONS/MiniCode-Python/commit/0760162edded7f787ceb05d98c04cc53f615c2cc)。作为个人学习项目使用。研读代码重构后，本分支在保留轻量终端 Agent 结构的基础上，重点新增：
 
 - OpenAI-compatible provider 与 DeepSeek V4 配置、重试和 usage 统计；
 - 同步、后台并行及 `.claude/agents` 自定义 subagent；
